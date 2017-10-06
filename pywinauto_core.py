@@ -2,8 +2,8 @@ import logging
 import re
 from pywinauto.application import Application
 
-from impl._params import Delay, fixed_val, pop, pop_re, pop_type, robot_args, pop_bool, pop_menu_path, str_2_bool
-from impl._util import IronbotException, waiting_iterator, result_modifier, error_decorator, stop_monitoring, setup_monitoring
+from impl._params import fixed_val, parse, parse_re, robot_args, parse_bool, pop_menu_path, str_2_bool
+from impl._util import Delay, IronbotException, waiting_iterator, result_modifier, stop_monitoring, setup_monitoring
 
 
 class PywinAutoCoreException(Exception):
@@ -38,21 +38,21 @@ def on_leave_suite():
             a.kill()
     del CONTROLLED_APPS[-1]
 
+
 LAUNCH_PARAMS = (
-    (pop,), {
-       'suite_teardown': (('teardown', fixed_val('suite')),),
-       'test_teardown': (('teardown', fixed_val('test')),),
-       'assert': (('_assert', fixed_val(True)),),
-       'params': (('params', pop),),
-       'workdir': (('workdir', pop),),
-       'failure_text': (('failure_text', pop),),
+    (parse,), {
+       'teardown': ('teardown', parse),
+       'assert': ('_assert', parse_bool),
+       'params': ('params', parse),
+       'workdir': ('workdir', parse),
+       'failure_text': ('failure_text', parse),
+       'backend': ('backend', parse),
     }
 )
 
 
 @robot_args(LAUNCH_PARAMS)
-@error_decorator
-def app_launch(executable, teardown=None, params='', _assert=False, **kw):
+def app_launch(executable, backend=None, teardown=None, params='', _assert=False, **kw):
     """
     App Launch | <executable> [ | params | <cmdline parameters string> ] [ | flags and params ]
 
@@ -64,7 +64,10 @@ def app_launch(executable, teardown=None, params='', _assert=False, **kw):
 
     """
     try:
-        app = Application().start(executable)
+        if backend is not None:
+            app = Application(backend=backend).start(executable)
+        else:
+            app = Application().start(executable)
     except:
         if _assert:
             logging.error('Failed to launch an executable')
@@ -80,17 +83,16 @@ def app_launch(executable, teardown=None, params='', _assert=False, **kw):
 
 
 APP_ATTACH_PARAMS = (
-    (pop,), {
-       'suite_teardown': (('teardown', fixed_val('suite')),),
-       'test_teardown': (('teardown', fixed_val('test')),),
-       'failure_text': (('failure_text', pop),),
+    (parse,), {
+       'teardown': ('teardown', parse),
+       'failure_text': ('failure_text', parse),
+       'backend': ('backend', parse),
     }
 )
 
 
 @robot_args(APP_ATTACH_PARAMS)
-@error_decorator
-def app_attach(processes, teardown=None):
+def app_attach(processes, backend=None, teardown=None):
     """
     App Attach | <proc_or_proc_list> [ | test_teardown/suite_teardown ]
 
@@ -105,7 +107,10 @@ def app_attach(processes, teardown=None):
     single = not isinstance(processes, list)
     if single:
         processes = [processes]
-    apps = [Application().connect(process=p) for p in processes]
+    if backend is not None:
+        apps = [Application(backend=backend).connect(process=p) for p in processes]
+    else:
+        apps = [Application().connect(process=p) for p in processes]
     if teardown == 'test':
         CONTROLLED_APPS[-1] += apps
     elif teardown == 'suite':
@@ -115,76 +120,37 @@ def app_attach(processes, teardown=None):
     return apps
 
 
-APP_STATE_PARAMS = (
-    (pop,), {
-       'running': (('running', fixed_val(True)),),
-       'not_running': (('running', fixed_val(False)),),
-       'kill': (('running', fixed_val(None)),),
-       'timeout': (('timeout', pop_type(Delay)),),
-       'assert': (('_assert', fixed_val(True)),),
-       'any': (('any', fixed_val(True)),),
-       'all': (('all', fixed_val(True)),),
-       'single': (('single', fixed_val(True)),),
-       'none': (('none', fixed_val(True)),),
-       'number': (('number', pop_type(int)),),
-       'failure_text': (('failure_text', pop),),
+def wnd_get(parent, wnd_name):
+    return parent[wnd_name]
+
+
+CLICK_BUTTON_PARAMS = (
+    (parse,), {
+       'title': ('title', parse),
+       'title_re': ('title_re', parse),
+       'control_id': ('control_id', parse),
+       'auto_id': ('auto_id', parse),
     }
 )
 
 
-@robot_args(APP_STATE_PARAMS)
-@error_decorator
-def app_state(app, running=True, timeout=Delay('0s'), any=False, all=False, single=False, none=False, _assert=False, number=None):
-    """
-    App State | <app> | params
-    :param app: required, positional -- an application object;
-    :param running: an optional flag -- the result is True if the app is running;
-    :param not_running: an optional flag -- the result is True if the app is not running;
-    :param kill: an optional flag -- same as not_running plus kills the app after waiting;
-    :param assert: an optional flag -- fail keyword on failure;
-    :param timeout: optional, followed by a delay value, e.g. *10s -- wait for the desired state.
-    :return: True if the app state at the end of waiting is as desired, otherwise False
-    """
-    src_app = app
-    if not isinstance(src_app, list):
-        app = [app]
-
-    kill = running is None
-    running = bool(running)
-
-    prefer_bool = all or any or single or none or not isinstance(src_app, list)
-
-    for _ in waiting_iterator(timeout):
-        res_list = []
-        for a in app:
-            res_list.append(bool(a.is_process_running()) == bool(running))
-        ok, res, msg = result_modifier(res_list, src_list=src_app, any=any, all=all, single=single, none=none, number=number, prefer_bool=prefer_bool)
-        if ok:
-            break
-
-    if kill:
-        for a in app:
-            if a.is_process_running():
-                logging.warning('Killing an application')
-                a.kill()
-    if ok:
-        return res
-    if _assert:
-        logging.error('App State failed: %s' % msg)
-        raise PywinAutoCoreException('App State failed: %s' % msg)
-    logging.warning('App State failed: %s' % msg)
-    return res
+@robot_args(CLICK_BUTTON_PARAMS)
+def click_button(window, title=None, title_re=None, control_id=None, auto_id=None):
+    if title is not None:
+        window.window(title=title, control_type="Button").click()
+    elif title_re is not None:
+        window.window(title_re=title_re, control_type="Button").click()
+    elif control_id is not None:
+        window.window(control_id=control_id, control_type="Button").click()
+    elif auto_id is not None:
+        window.window(auto_id=auto_id, control_type="Button").click()
 
 
-def wnd_get(parent, wnd_name):
-    if not isinstance(wnd_name, str):
-        raise PywinAutoCoreException("Wnd Get: 'wnd_name' must be type str")
-    return parent[wnd_name]
-
-
-def cnt_get(window, cnt_title, cnt_type):
-    if not isinstance(cnt_title, str):
-        raise PywinAutoCoreException("Cnt Get: 'cnt_title' must be type str")
-    if not isinstance(cnt_type, str):
-        raise PywinAutoCoreException("Cnt Get: 'cnt_type' must be type str")
-    return window.ChildWindow(title=cnt_title, control_type=cnt_type)
+if __name__ == "__main__":
+    on_enter_suite()
+    on_enter_test()
+    app = app_launch("calc.exe", backend="uia", teardown="test")
+    w = wnd_get(app, "Calculator")
+    click_button(w, title_re="4+")
+    on_leave_test()
+    on_leave_suite()

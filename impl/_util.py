@@ -21,40 +21,40 @@ def get_function(seq):
         return i.next()
     return fun
 
-def error_decorator(f):
-    """
-    >>> @error_decorator
-    ... def f(a):
-    ...     "abc"
-    ...     if a: return 0
-    ...     raise Exception("An utter failure happened")
-    >>> f.__doc__
-    'abc'
-    >>> f(1)
-    0
-    >>> try:
-    ...     f(0)
-    ... except Exception, e:
-    ...     print str(e)
-    An utter failure happened
-    >>> try:
-    ...     f(0, failure_text="YES!")
-    ... except Exception, e:
-    ...     print str(e)
-    YES! (An utter failure happened)
-    """
-    def wrapper(*a, **kw):
-        failure_text = kw.get('failure_text', None)
-        if 'failure_text' in kw:
-            del kw['failure_text']
-        try:
-            return f(*a, **kw)
-        except Exception, e:
-            if failure_text is None:
-                raise
-            raise UserError(e, failure_text)
-    wrapper.__doc__ = f.__doc__
-    return wrapper
+#def error_decorator(f):
+#    """
+#    >>> @error_decorator
+#    ... def f(a):
+#    ...     "abc"
+#    ...     if a: return 0
+#    ...     raise Exception("An utter failure happened")
+#    >>> f.__doc__
+#    'abc'
+#    >>> f(1)
+#    0
+#    >>> try:
+#    ...     f(0)
+#    ... except Exception, e:
+#    ...     print str(e)
+#    An utter failure happened
+#    >>> try:
+#    ...     f(0, failure_text="YES!")
+#    ... except Exception, e:
+#    ...     print str(e)
+#    YES! (An utter failure happened)
+#    """
+#    def wrapper(*a, **kw):
+#        failure_text = kw.get('failure_text', None)
+#        if 'failure_text' in kw:
+#            del kw['failure_text']
+#        try:
+#            return f(*a, **kw)
+#        except Exception, e:
+#            if failure_text is None:
+#                raise
+#            raise UserError(e, failure_text)
+#    wrapper.__doc__ = f.__doc__
+#    return wrapper
 
 
 def assert_raises(exc, f, *a, **kw):
