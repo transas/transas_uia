@@ -1,9 +1,10 @@
 import logging
-import re
-from pywinauto.application import Application
 
-from impl._params import fixed_val, parse, parse_re, robot_args, parse_bool, pop_menu_path, str_2_bool
-from impl._util import Delay, IronbotException, waiting_iterator, result_modifier, stop_monitoring, setup_monitoring
+from impl._params import parse, robot_args, parse_bool
+from impl._util import Delay
+
+from pywinauto import Desktop
+from pywinauto.application import Application
 
 
 class PywinAutoCoreException(Exception):
@@ -13,23 +14,19 @@ class PywinAutoCoreException(Exception):
 CONTROLLED_APPS = [] #None
 
 
-def on_enter_test():
-    CONTROLLED_APPS.append([])
-
+def on_enter_test(app):
+    CONTROLLED_APPS.append(app)
 
 def on_enter_suite():
     CONTROLLED_APPS.append([])
     Delay.do_benchmarking()
 
-
 def on_leave_test():
-    for a in CONTROLLED_APPS[-1]:
+    for a in CONTROLLED_APPS[::-1]:
         if a.is_process_running():
             logging.warning('Test teardown: an app is still running')
             a.kill()
     del CONTROLLED_APPS[-1]
-    stop_monitoring()
-
 
 def on_leave_suite():
     for a in CONTROLLED_APPS[-1]:
@@ -38,9 +35,9 @@ def on_leave_suite():
             a.kill()
     del CONTROLLED_APPS[-1]
 
-
 LAUNCH_PARAMS = (
-    (parse,), {
+    (parse,),
+    {
        'teardown': ('teardown', parse),
        'assert': ('_assert', parse_bool),
        'params': ('params', parse),
@@ -49,7 +46,6 @@ LAUNCH_PARAMS = (
        'backend': ('backend', parse),
     }
 )
-
 
 @robot_args(LAUNCH_PARAMS)
 def app_launch(executable, backend=None, teardown=None, params='', _assert=False, **kw):
@@ -83,13 +79,13 @@ def app_launch(executable, backend=None, teardown=None, params='', _assert=False
 
 
 APP_ATTACH_PARAMS = (
-    (parse,), {
+    (parse,),
+    {
        'teardown': ('teardown', parse),
        'failure_text': ('failure_text', parse),
        'backend': ('backend', parse),
     }
 )
-
 
 @robot_args(APP_ATTACH_PARAMS)
 def app_attach(processes, backend=None, teardown=None):
@@ -119,13 +115,41 @@ def app_attach(processes, backend=None, teardown=None):
         return apps[0]
     return apps
 
+def get_window(app, window_name, use_desktop=False, backend=None):
+    if use_desktop:
+        return Desktop(backend=backend)[window_name]
+    else:
+        return app[window_name]
 
-def wnd_get(parent, wnd_name):
-    return parent[wnd_name]
+def get_parent_element(parent, element_name=None, **kwargs):
+    if element_name is None:
+        return parent.child_window(**kwargs)
+    else:
+        return parent[element_name]
 
+def element_wait(element, wait_for, timeout=None, retry_interval=None):
+    """
+    pywinauto doc:
+    :param wait_for: The state to wait for the window to be in. It can
+        be any of the following states, also you may combine the states by space key.
+         * 'exists' means that the window is a valid handle
+         * 'visible' means that the window is not hidden
+         * 'enabled' means that the window is not disabled
+         * 'ready' means that the window is visible and enabled
+         * 'active' means that the window is active
+    """
+    return element.wait(wait_for, timeout, retry_interval)
+
+def do_action(parent, action, **kwargs):
+    act = getattr(parent, action)
+    if callable(act):
+        act(**kwargs)
+    else:
+        raise PywinAutoCoreException()
 
 CLICK_BUTTON_PARAMS = (
-    (parse,), {
+    (parse,),
+    {
        'title': ('title', parse),
        'title_re': ('title_re', parse),
        'control_id': ('control_id', parse),
@@ -133,24 +157,14 @@ CLICK_BUTTON_PARAMS = (
     }
 )
 
-
 @robot_args(CLICK_BUTTON_PARAMS)
-def click_button(window, title=None, title_re=None, control_id=None, auto_id=None):
-    if title is not None:
-        window.window(title=title, control_type="Button").click()
-    elif title_re is not None:
-        window.window(title_re=title_re, control_type="Button").click()
-    elif control_id is not None:
-        window.window(control_id=control_id, control_type="Button").click()
-    elif auto_id is not None:
-        window.window(auto_id=auto_id, control_type="Button").click()
+def click_button(window, control_type="Button", **kwargs):
+    window.child_window(control_type=control_type, **kwargs).click()
 
 
 if __name__ == "__main__":
-    on_enter_suite()
-    on_enter_test()
-    app = app_launch("calc.exe", backend="uia", teardown="test")
-    w = wnd_get(app, "Calculator")
-    click_button(w, title_re="4+")
+
+    app = app_launch('notepad.exe', backend='uia')
+    on_enter_test(app)
+    win = get_window(app, 'Untitled - Notepad')
     on_leave_test()
-    on_leave_suite()
