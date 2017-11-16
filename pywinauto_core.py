@@ -88,7 +88,7 @@ APP_ATTACH_PARAMS = (
 )
 
 @robot_args(APP_ATTACH_PARAMS)
-def app_attach(processes, backend=None, teardown=None):
+def app_attach(processes, backend=None, teardown=None, **kwargs):
     """
     App Attach | <proc_or_proc_list> [ | test_teardown/suite_teardown ]
 
@@ -115,18 +115,50 @@ def app_attach(processes, backend=None, teardown=None):
         return apps[0]
     return apps
 
+
+GET_WINDOW_PARAMS = (
+    (parse, parse),
+    {
+       'use_desktop': ('use_desktop', parse_bool),
+       'backend': ('backend', parse),
+    }
+)
+
+@robot_args(GET_WINDOW_PARAMS)
 def get_window(app, window_name, use_desktop=False, backend=None):
     if use_desktop:
         return Desktop(backend=backend)[window_name]
     else:
         return app[window_name]
 
-def get_parent_element(parent, element_name=None, **kwargs):
-    if element_name is None:
-        return parent.child_window(**kwargs)
-    else:
-        return parent[element_name]
+GET_ELEMENT_PARAMS = (
+    (parse,),
+    {
+       'title': ('title', parse),
+       'title_re': ('title_re', parse),
+       'control_id': ('control_id', parse),
+       'auto_id': ('auto_id', parse),
+       'control_type': ('control_type', parse),
+       'element_name': ('element_name', parse),
+    }
+)
 
+@robot_args(GET_ELEMENT_PARAMS)
+def get_parent_element(parent, element_name=None, **kwargs):
+    if element_name:
+        return parent[element_name]
+    else:
+        return parent.child_window(**kwargs)
+
+WAIT_PARAMS = (
+    (parse, parse),
+    {
+       'timeout': ('timeout', int),
+       'retry_interval': ('retry_interval', parse),
+    }
+)
+
+@robot_args(WAIT_PARAMS)
 def element_wait(element, wait_for, timeout=None, retry_interval=None):
     """
     pywinauto doc:
@@ -140,12 +172,35 @@ def element_wait(element, wait_for, timeout=None, retry_interval=None):
     """
     return element.wait(wait_for, timeout, retry_interval)
 
+
+DO_ACTION_PARAMS = (
+    (parse, parse),
+    {
+       'title': ('title', parse),
+       'title_re': ('title_re', parse),
+       'control_id': ('control_id', parse),
+       'auto_id': ('auto_id', parse),
+    }
+)
+
+@robot_args(DO_ACTION_PARAMS)
 def do_action(parent, action, **kwargs):
     act = getattr(parent, action)
-    if callable(act):
-        act(**kwargs)
+    if act:
+        if callable(act):
+            act(**kwargs)
+        else:
+            raise PywinAutoCoreException()
     else:
-        raise PywinAutoCoreException()
+        raise PywinAutoCoreException("There is no such element: {}".format(action))
+
+@robot_args(DO_ACTION_PARAMS)
+def get_attribute(parent, attribute, **kwargs):
+    act = getattr(parent, attribute)
+    if callable(act):
+        return act(**kwargs)
+    else:
+        return act
 
 CLICK_BUTTON_PARAMS = (
     (parse,),
@@ -161,6 +216,66 @@ CLICK_BUTTON_PARAMS = (
 def click_button(window, control_type="Button", **kwargs):
     window.child_window(control_type=control_type, **kwargs).click()
 
+def print_control_identifiers(element):
+    do_action(element, 'print_control_identifiers')
+    print(dir(element))
+
+TYPE_KEYS_PARAMS = (
+    (parse, str),
+    {
+       'pause': ('pause', parse),
+       'with_spaces': ('with_spaces', parse_bool),
+       'with_tabs': ('with_tabs', parse_bool),
+       'with_newlines': ('with_newlines', parse_bool),
+       'turn_off_numlock': ('turn_off_numlock', parse_bool),
+       'set_foreground': ('set_foreground', parse_bool),
+    }
+)
+
+@robot_args(CLICK_BUTTON_PARAMS)
+def type_keys(element, keys, **kwargs):
+    ''' doc - http://pywinauto.readthedocs.io/en/latest/code/pywinauto.keyboard.html '''
+    element.type_keys(keys, **kwargs)
+
+def input_text(element, text):
+    element.type_keys(text)
+
+def clear_input_element(element):
+    element.type_keys('^a{DELETE}')
+
+TYPE_STATE_CHECKBOX = (
+    (parse, parse_bool),
+    {
+    }
+)
+
+@robot_args(TYPE_STATE_CHECKBOX)
+def set_state_checkbox(element, state):
+    if element.get_toggle_state() != state:
+        element.click_input()
+
+def click_radio_button(element):
+    element.click_input()
+
+def activate_tab(element):
+    element.set_focus()
+
+def tree_item_action(element, action='collapse'):
+    '''
+    :param action: str - `collapse` or `expand`
+    '''
+    if action == 'collapse':
+        element.collapse()
+    elif action == 'expand':
+        element.expand()
+
+def get_element_text(element, row=0):
+    '''
+    :param element:
+    :param row: 0 - all rows
+    :return: str
+    '''
+    return element.texts()[int(row)]
 
 if __name__ == "__main__":
 
@@ -168,3 +283,5 @@ if __name__ == "__main__":
     on_enter_test(app)
     win = get_window(app, 'Untitled - Notepad')
     on_leave_test()
+    tbox = get_parent_element(win, auto_id="AID_TextBox1", control_type="Edit")
+    tbox.type_keys()
