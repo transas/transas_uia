@@ -6,7 +6,7 @@ import re
 
 
 
-class IronbotParametersException(Exception):
+class TuiaParametersException(Exception):
     pass
 
 
@@ -38,7 +38,7 @@ def str_2_bool(s):
     try:
         return BOOL_VALS[s.upper()]
     except:
-        raise IronbotException("Cannot cast to bool: '%s'" % s)
+        raise TuiaParametersException("Cannot cast to bool: '%s'" % s)
 
 
 def parse_bool(param):
@@ -48,7 +48,7 @@ def parse_bool(param):
     >>> parse_bool('TrUe')
     True
     >>> try: parse_bool('TrAlSe')
-    ... except IronbotParametersException: print("YES!")
+    ... except TuiaParametersException: print("YES!")
     YES!
     """
     try:
@@ -57,7 +57,7 @@ def parse_bool(param):
             return s
         return BOOL_VALS[s.upper()]
     except KeyError:
-        raise IronbotParametersException("Expected a value of type bool, got '%s'" % s)
+        raise TuiaParametersException("Expected a value of type bool, got '%s'" % s)
 
 
 def pop_menu_path(params):
